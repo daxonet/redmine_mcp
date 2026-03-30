@@ -1,0 +1,13 @@
+pre-commit:
+  jobs:
+    - name: Ts Format
+      glob: "*.ts"
+      run: npm run format
+
+    - name: Ts Lint
+      glob: "*.ts"
+      run: npm run lint
+
+    - name: Actions Lint
+      glob: ".github/workflows/*.yml"
+      run: actionlint

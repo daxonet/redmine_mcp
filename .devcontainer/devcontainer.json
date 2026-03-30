@@ -1,0 +1,23 @@
+{
+    "name": "Redmine",
+    "image": "mcr.microsoft.com/devcontainers/ruby:3.2-trixie",
+    "runArgs": [
+        "--userns=keep-id"
+    ],
+    "securityOpt": [
+        "label=disable",
+        "seccomp=unconfined"
+    ],
+    "containerEnv": {
+        "PLUGIN_NAME": "redmine_mcp",
+        "RAILS_ENV": "test",
+        "REDMINE_HOME": "/usr/src/redmine"
+    },
+    "onCreateCommand": "/bin/bash ${containerWorkspaceFolder}/.devcontainer/on-create.sh",
+    "postCreateCommand": "/bin/bash ${containerWorkspaceFolder}/.devcontainer/post-create.sh",
+    "containerUser": "vscode",
+    "forwardPorts": [
+        3000,
+        9323
+    ]
+}

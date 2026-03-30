@@ -1,0 +1,50 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "rdbg",
+            "name": "Redmine 5.1",
+            "request": "launch",
+            "script": "bin/rails",
+            "args": ["server", "--binding", "0.0.0.0", "--port", "3000"],
+            "showDebugOutput": true,
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "/usr/src/redmine/5.1/plugins/redmine_mcp"
+                }
+            ],
+            "cwd": "/usr/src/redmine/5.1"
+        },
+        {
+            "type": "rdbg",
+            "name": "Redmine 6.0",
+            "request": "launch",
+            "script": "bin/rails",
+            "args": ["server", "--binding", "0.0.0.0", "--port", "3000"],
+            "showDebugOutput": true,
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "/usr/src/redmine/6.0/plugins/redmine_mcp"
+                }
+            ],
+            "cwd": "/usr/src/redmine/6.0"
+        },
+        {
+            "type": "rdbg",
+            "name": "Redmine 6.1",
+            "request": "launch",
+            "script": "bin/rails",
+            "args": ["server", "--binding", "0.0.0.0", "--port", "3000"],
+            "showDebugOutput": true,
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "/usr/src/redmine/6.1/plugins/redmine_mcp"
+                }
+            ],
+            "cwd": "/usr/src/redmine/6.1"
+        }
+    ]
+}

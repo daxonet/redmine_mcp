@@ -1,0 +1,217 @@
+<% content_for :header_tags do %>
+<style>
+.mcp-filter-bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;
+  background:#f7f7f7;border:1px solid #ddd;border-radius:4px;padding:10px 14px;margin-bottom:14px}
+.mcp-filter-bar .fg{display:flex;flex-direction:column;gap:3px}
+.mcp-filter-bar label{font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px}
+.mcp-filter-bar select,.mcp-filter-bar input[type=text]{height:28px;padding:0 7px;font-size:13px;
+  border:1px solid #ccc;border-radius:3px;background:#fff;box-sizing:border-box}
+
+#mcp-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+#mcp-table col.c-user   {width:18%}
+#mcp-table col.c-client {width:10%}
+#mcp-table col.c-scopes {width:9%}
+#mcp-table col.c-issued {width:14%}
+#mcp-table col.c-access {width:14%}
+#mcp-table col.c-refresh{width:14%}
+#mcp-table col.c-status {width:7%}
+#mcp-table col.c-action {width:7%}
+#mcp-table th{background:#eee;padding:7px 8px;text-align:left;border-bottom:2px solid #ccc;
+  font-size:12px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mcp-table th a{color:#444;text-decoration:none}
+#mcp-table th a:hover{text-decoration:underline}
+#mcp-table th.sorted{background:#dde8f0}
+#mcp-table td{padding:7px 8px;border-bottom:1px solid #eee;vertical-align:middle;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mcp-table tr:hover td{background:#fafafa}
+#mcp-table tr:last-child td{border-bottom:none}
+.badge-on {background:#d4edda;color:#155724;border-radius:10px;padding:1px 8px;font-size:11px}
+.badge-off{background:#f0f0f0;color:#888;   border-radius:10px;padding:1px 8px;font-size:11px}
+
+.mcp-pager{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:13px;color:#666}
+.mcp-pager a,.mcp-pager span.pgn{display:inline-block;min-width:26px;text-align:center;
+  padding:2px 6px;margin:0 1px;border:1px solid #ddd;border-radius:3px;text-decoration:none;color:#4a90d9}
+.mcp-pager span.pgn.cur{background:#4a90d9;color:#fff;border-color:#4a90d9;font-weight:600}
+.mcp-pager a:hover{background:#f0f6ff}
+.mcp-pager a.ell{border:none;color:#aaa;cursor:default;pointer-events:none}
+
+.uri-row{display:flex;align-items:center;justify-content:space-between;
+  background:#f5f5f5;border:1px solid #e0e0e0;border-radius:3px;
+  padding:5px 10px;margin-bottom:5px;font-family:monospace;font-size:13px}
+</style>
+<% end %>
+
+<h2>MCP Authorizations</h2>
+
+<%# ── Trusted Redirect URIs ── %>
+<h3 style="font-size:14px;font-weight:600;border-bottom:1px solid #ddd;padding-bottom:5px;margin:0 0 10px">Trusted Redirect URIs</h3>
+<p style="font-size:13px;color:#666;margin-bottom:10px">
+  Only <code>redirect_uri</code> values listed here may be used in OAuth.
+  Leave empty to allow any URI.
+</p>
+
+<% if @allowed_uris.any? %>
+  <% @allowed_uris.each do |uri| %>
+    <div class="uri-row">
+      <span><%= h uri %></span>
+      <%= form_tag mcp_admin_settings_path, method: :post, style: 'margin:0' do %>
+        <%= hidden_field_tag :allowed_redirect_uris, (@allowed_uris - [uri]).join("\n") %>
+        <input type="submit" value="×"
+               style="background:none;border:none;color:#c00;font-size:18px;cursor:pointer;padding:0 4px;line-height:1"
+               title="Remove">
+      <% end %>
+    </div>
+  <% end %>
+<% else %>
+  <p style="font-size:13px;color:#aaa;font-style:italic;margin-bottom:8px">No URIs configured — any redirect_uri is accepted.</p>
+<% end %>
+
+<%= form_tag mcp_admin_settings_path, method: :post, style: 'margin-top:8px' do %>
+  <%= hidden_field_tag :allowed_redirect_uris, @allowed_uris.join("\n") %>
+  <div style="display:flex;gap:8px">
+    <input type="text" name="new_uri" placeholder="https://claude.ai/api/mcp/auth_callback"
+           style="flex:1;height:30px;padding:0 9px;border:1px solid #ccc;border-radius:3px;font-size:13px;font-family:monospace">
+    <input type="submit" name="add_uri" value="Add"
+           style="height:30px;padding:0 18px;background:#4a90d9;color:#fff;border:none;border-radius:3px;font-size:13px;cursor:pointer;font-weight:600">
+  </div>
+  <p style="font-size:12px;color:#aaa;margin-top:5px">Exact match only — wildcards not supported.</p>
+<% end %>
+
+<h3 style="font-size:14px;font-weight:600;border-bottom:1px solid #ddd;padding-bottom:5px;margin:24px 0 10px">Active Authorizations</h3>
+
+<%# ── Filter bar ── %>
+<%= form_tag mcp_admin_tokens_path, method: :get, class: 'mcp-filter-bar' do %>
+  <div class="fg">
+    <label>User</label>
+    <%= select_tag :user_id,
+          options_from_collection_for_select(@token_users, :id,
+            ->(u){"#{u.name} (#{u.login})"}, params[:user_id].to_s),
+          include_blank: '— All users —',
+          style: 'width:180px;height:28px;font-size:13px;border:1px solid #ccc;border-radius:3px' %>
+  </div>
+  <div class="fg">
+    <label>Client</label>
+    <input type="text" name="client_name" value="<%= h params[:client_name] %>"
+           placeholder="Search…"
+           style="width:130px;height:28px;padding:0 7px;font-size:13px;border:1px solid #ccc;border-radius:3px">
+  </div>
+  <div class="fg">
+    <label>Status</label>
+    <%= select_tag :status,
+          options_for_select([['— All —',''],['Active','active'],['Expired','expired']], params[:status].to_s),
+          style: 'width:110px;height:28px;font-size:13px;border:1px solid #ccc;border-radius:3px' %>
+  </div>
+  <div class="fg">
+    <label>Per page</label>
+    <%= select_tag :per_page,
+          options_for_select([[25,25],[50,50],[100,100]], (params[:per_page]||25).to_i),
+          style: 'width:75px;height:28px;font-size:13px;border:1px solid #ccc;border-radius:3px' %>
+  </div>
+  <div style="display:flex;gap:6px;padding-bottom:1px">
+    <input type="submit" value="Filter"
+           style="height:28px;padding:0 16px;background:#4a90d9;color:#fff;border:none;border-radius:3px;font-size:13px;cursor:pointer;font-weight:600">
+    <%= link_to 'Reset', mcp_admin_tokens_path,
+          style: 'display:inline-flex;align-items:center;height:28px;padding:0 12px;background:#fff;color:#555;border:1px solid #ccc;border-radius:3px;font-size:13px;text-decoration:none' %>
+  </div>
+<% end %>
+
+<% if @tokens.empty? %>
+  <p style="color:#aaa;font-style:italic;padding:16px 0">No authorizations match the current filters.</p>
+<% else %>
+  <%
+    from = (@page-1)*@per_page + 1
+    to   = [@page*@per_page, @token_count].min
+    q    = request.query_parameters
+    cur_sort = (params[:sort] || 'created_at:desc').split(':')
+    cur_col  = cur_sort[0]
+    cur_dir  = cur_sort[1] || 'desc'
+  %>
+  <p style="font-size:13px;color:#666;margin-bottom:8px">
+    Showing <%= from %>–<%= to %> of <strong><%= @token_count %></strong> token(s).
+  </p>
+
+  <table id="mcp-table">
+    <colgroup>
+      <col class="c-user"><col class="c-client"><col class="c-scopes">
+      <col class="c-issued"><col class="c-access"><col class="c-refresh">
+      <col class="c-status"><col class="c-action">
+    </colgroup>
+    <thead>
+      <tr>
+        <%= mcp_col_link('User',           'user_id',    cur_col, cur_dir, q) %>
+        <%= mcp_col_link('Client',         'client_id',  cur_col, cur_dir, q) %>
+        <th>Scopes</th>
+        <%= mcp_col_link('Issued',         'created_at', cur_col, cur_dir, q) %>
+        <%= mcp_col_link('Access expires', 'expires_at', cur_col, cur_dir, q) %>
+        <th>Refresh expires</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @tokens.each do |token| %>
+        <% client = @clients[token.client_id] %>
+        <tr>
+          <td><%= link_to token.user.name, user_path(token.user) %> (<%= h token.user.login %>)</td>
+          <td><%= h client&.client_name.presence || '—' %></td>
+          <td><code><%= h token.scopes %></code></td>
+          <td><%= format_time token.created_at %></td>
+          <td><%= format_time token.expires_at %></td>
+          <td><%= format_time token.refresh_expires_at %></td>
+          <td><span class="<%= token.expires_at > Time.current ? 'badge-on' : 'badge-off' %>">
+            <%= token.expires_at > Time.current ? 'Active' : 'Expired' %>
+          </span></td>
+          <td>
+            <%= link_to 'Revoke', mcp_admin_token_path(token),
+                  method: :delete,
+                  data: { confirm: 'Revoke this authorization?' },
+                  class: 'icon icon-del',
+                  style: 'white-space:nowrap' %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+
+  <%# Pagination %>
+  <div class="mcp-pager">
+    <div>
+      <% if @page > 1 %>
+        <%= link_to '‹', mcp_admin_tokens_path(q.merge(page: @page-1)) %>
+      <% end %>
+      <%
+        first_win = [@page-2, 1].max
+        last_win  = [@page+2, @page_count].min
+      %>
+      <% if first_win > 1 %>
+        <%= link_to '1', mcp_admin_tokens_path(q.merge(page:1)), class:'pgn' %>
+        <a class="ell">…</a> if first_win > 2
+      <% end %>
+      <% (first_win..last_win).each do |p| %>
+        <% if p == @page %>
+          <span class="pgn cur"><%= p %></span>
+        <% else %>
+          <%= link_to p, mcp_admin_tokens_path(q.merge(page:p)), class:'pgn' %>
+        <% end %>
+      <% end %>
+      <% if last_win < @page_count %>
+        <a class="ell">…</a> if last_win < @page_count-1
+        <%= link_to @page_count, mcp_admin_tokens_path(q.merge(page:@page_count)), class:'pgn' %>
+      <% end %>
+      <% if @page < @page_count %>
+        <%= link_to '›', mcp_admin_tokens_path(q.merge(page: @page+1)) %>
+      <% end %>
+    </div>
+    <span>Page <%= @page %> of <%= @page_count %></span>
+  </div>
+
+  <% if params[:user_id].present? %>
+    <p style="margin-top:10px">
+      <%= link_to 'Revoke all tokens for this user',
+            mcp_admin_revoke_user_path(user_id: params[:user_id]),
+            method: :delete,
+            data: { confirm: 'Revoke ALL tokens for this user?' },
+            style: 'color:#c00;font-size:13px' %>
+    </p>
+  <% end %>
+<% end %>

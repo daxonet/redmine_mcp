@@ -1,0 +1,8 @@
+/.bundle
+/node_modules
+/coverage
+/artifacts
+/log
+/tmp
+*.rbc
+.DS_Store

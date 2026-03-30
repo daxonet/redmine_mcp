@@ -1,0 +1,7 @@
+en:
+  label_mcp_authorizations: "MCP Authorizations"
+  label_mcp_trusted_uris: "Trusted Redirect URIs"
+  label_mcp_active_authorizations: "Active Authorizations"
+  notice_mcp_uris_updated: "Trusted URLs updated."
+  notice_mcp_token_revoked: "Authorization revoked."
+  notice_mcp_user_tokens_revoked: "All authorizations for user revoked."
