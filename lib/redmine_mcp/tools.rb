@@ -166,6 +166,18 @@ module RedmineMcp
               due_date:         { type: 'string',  description: 'Due date (YYYY-MM-DD)' },
               start_date:       { type: 'string',  description: 'Start date (YYYY-MM-DD)' },
               estimated_hours:  { type: 'number',  description: 'Estimated hours' },
+              custom_fields: {
+                type: 'array',
+                description: 'Custom field values to set. Use list_custom_fields to get field IDs.',
+                items: {
+                  type: 'object',
+                  required: %w[id value],
+                  properties: {
+                    id:    { type: 'integer', description: 'Custom field ID' },
+                    value: { description: 'Value to set (string, or array for multi-select fields)' }
+                  }
+                }
+              },
               uploads: {
                 type: 'array',
                 description: 'Attachments to add (use tokens from upload_file)',
@@ -919,6 +931,13 @@ module RedmineMcp
                      done_ratio due_date start_date estimated_hours]
       attrs = args.slice(*updatable).reject { |_, v| v.nil? }
       issue.assign_attributes(attrs) unless attrs.empty?
+
+      if args['custom_fields'].present?
+        cf_values = args['custom_fields'].each_with_object({}) do |cf, h|
+          h[cf['id'].to_s] = cf['value']
+        end
+        issue.custom_field_values = cf_values
+      end
 
       raise "Failed to update issue: #{issue.errors.full_messages.join(', ')}" unless issue.save
       attach_uploads(issue, args['uploads'], user) if args['uploads'].present?
