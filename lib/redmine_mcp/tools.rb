@@ -162,6 +162,7 @@ module RedmineMcp
               fixed_version_id: { type: 'integer', description: 'New target version ID' },
               parent_issue_id:  { type: 'integer', description: 'New parent issue ID' },
               notes:            { type: 'string',  description: 'Comment to add' },
+              reason:           { type: 'string',  description: 'Reason for changing tracked fields (required when the redmine_issue_update_statistics plugin is active and a tracked field such as status or assignee is changed)' },
               done_ratio:       { type: 'integer', description: 'Percentage done (0-100)' },
               due_date:         { type: 'string',  description: 'Due date (YYYY-MM-DD)' },
               start_date:       { type: 'string',  description: 'Start date (YYYY-MM-DD)' },
@@ -925,6 +926,7 @@ module RedmineMcp
       raise "Issue ##{args['id']} not found" unless issue
 
       issue.init_journal(user, args['notes']) if args['notes'].present?
+      issue.update_reason = args['reason'] if args['reason'].present?
 
       updatable = %w[subject description status_id priority_id assigned_to_id
                      category_id fixed_version_id parent_issue_id
