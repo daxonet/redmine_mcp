@@ -2,17 +2,19 @@
 
 require File.expand_path("../../test_helper", __FILE__)
 
-class McpAdminControllerTest < Redmine::ControllerTest
+class McpAdminControllerTest < Redmine::IntegrationTest
   fixtures :users
 
   def setup
+    super
     McpOauthToken.delete_all
     McpOauthClient.delete_all
-    @request.session[:user_id] = 1 # admin
+    log_user("admin", "admin")
   end
 
   def test_index_requires_admin
-    @request.session[:user_id] = 2 # non-admin
+    post "/logout"
+    log_user("jsmith", "jsmith")
     get "/admin/mcp/tokens"
     assert_response :forbidden
   end
@@ -27,7 +29,7 @@ class McpAdminControllerTest < Redmine::ControllerTest
     create_token(expires_at: 1.second.ago)
     get "/admin/mcp/tokens", params: { status: "active" }
     assert_response :success
-    assert_equal 1, assigns(:token_count)
+    assert_select "#mcp-table tbody tr", 1
   end
 
   def test_index_filters_by_status_expired
@@ -35,14 +37,14 @@ class McpAdminControllerTest < Redmine::ControllerTest
     create_token(expires_at: 1.second.ago)
     get "/admin/mcp/tokens", params: { status: "expired" }
     assert_response :success
-    assert_equal 1, assigns(:token_count)
+    assert_select "#mcp-table tbody tr", 1
   end
 
   def test_index_paginates
     5.times { create_token }
     get "/admin/mcp/tokens", params: { per_page: 25 }
     assert_response :success
-    assert_equal 5, assigns(:token_count)
+    assert_select "#mcp-table tbody tr", 5
   end
 
   def test_destroy_revokes_token

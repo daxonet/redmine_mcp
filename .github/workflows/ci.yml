@@ -6,7 +6,6 @@ on:
     tags-ignore: ["**"]
     paths-ignore:
       - ".devcontainer/**"
-      - ".github/**"
       - ".vscode/**"
       - ".gitignore"
       - ".lefthook.yml"
@@ -18,14 +17,31 @@ permissions:
   contents: read
 
 jobs:
-  mysql57:
-    uses: 9506hqwy/actions/.github/workflows/redmine-ci-mysql57.yml@main
+  standalone:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - name: Install standalone check dependencies
+        run: gem install minitest:6.0.6 activesupport:8.1.4 --no-document
+      - name: Check tool permissions and serialization without model pollution
+        run: |
+          ruby test/standalone/tool_authorization_check.rb
+          ruby test/standalone/tool_serialization_check.rb
 
   mysql80:
     uses: 9506hqwy/actions/.github/workflows/redmine-ci-mysql80.yml@main
+    with:
+      redmine-versions: '["6.0", "6.1", "7.0"]'
 
   postgres:
     uses: 9506hqwy/actions/.github/workflows/redmine-ci-postgres.yml@main
+    with:
+      redmine-versions: '["6.0", "6.1", "7.0"]'
 
   sqlite3:
     uses: 9506hqwy/actions/.github/workflows/redmine-ci-sqlite3.yml@main
+    with:
+      redmine-versions: '["6.0", "6.1", "7.0"]'

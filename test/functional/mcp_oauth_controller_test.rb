@@ -2,10 +2,12 @@
 
 require File.expand_path("../../test_helper", __FILE__)
 
-class McpOauthControllerTest < Redmine::ControllerTest
+class McpOauthControllerTest < Redmine::IntegrationTest
   fixtures :users
 
   def setup
+    super
+    Setting.plugin_redmine_mcp = { "allowed_redirect_uris" => "https://example.com/cb" }
     McpOauthClient.delete_all
     McpOauthToken.delete_all
     McpOauthAuthCode.delete_all

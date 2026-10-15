@@ -162,6 +162,7 @@ module RedmineMcp
               fixed_version_id: { type: 'integer', description: 'New target version ID' },
               parent_issue_id:  { type: 'integer', description: 'New parent issue ID' },
               notes:            { type: 'string',  description: 'Comment to add' },
+              reason:           { type: 'string', description: 'Reason for tracked field changes; defaults to notes when omitted' },
               done_ratio:       { type: 'integer', description: 'Percentage done (0-100)' },
               due_date:         { type: 'string',  description: 'Due date (YYYY-MM-DD)' },
               start_date:       { type: 'string',  description: 'Start date (YYYY-MM-DD)' },
@@ -1007,7 +1008,7 @@ module RedmineMcp
         name:        args['name'],
         description: args['description'],
         status:      args['status'] || 'open',
-        due_date:    args['due_date'],
+        effective_date: args['due_date'],
         sharing:     args['sharing'] || 'none'
       )
       raise "Failed to create version: #{v.errors.full_messages.join(', ')}" unless v.save
@@ -1017,9 +1018,10 @@ module RedmineMcp
     def self.update_version(args, user)
       v = Version.find_by(id: args['id'].to_i)
       raise "Version not found: #{args['id']}" unless v
-      %w[name description status due_date sharing].each do |f|
+      %w[name description status sharing].each do |f|
         v.send(:"#{f}=", args[f]) if args.key?(f)
       end
+      v.effective_date = args['due_date'] if args.key?('due_date')
       raise "Failed to update version: #{v.errors.full_messages.join(', ')}" unless v.save
       serialize_version(v)
     end
@@ -1396,8 +1398,11 @@ module RedmineMcp
           'description' => upload['description'].to_s
         }
       end
-      saved, _failed = Attachment.attach_files(container, uploads_hash)
-      container.save if saved.any?
+      result = Attachment.attach_files(container, uploads_hash)
+      if result[:unsaved].any? || result[:files].size != uploads.size
+        raise 'Failed to attach one or more uploads'
+      end
+      container.save! if result[:files].any?
     end
 
     # ── Search ────────────────────────────────────────────────────────────────
@@ -1525,14 +1530,14 @@ module RedmineMcp
 
     def self.serialize_version(v)
       { id: v.id, name: v.name, description: v.description,
-        status: v.status, due_date: v.due_date&.iso8601, sharing: v.sharing,
+        status: v.status, due_date: v.effective_date&.iso8601, sharing: v.sharing,
         project: { id: v.project_id, name: v.project&.name },
         created_on: v.created_on&.iso8601, updated_on: v.updated_on&.iso8601 }
     end
 
     def self.serialize_membership(m)
       { id: m.id,
-        principal: { id: m.principal_id, name: m.principal&.name, type: m.principal&.class&.name },
+        principal: { id: m.user_id, name: m.principal&.name, type: m.principal&.class&.name },
         roles: m.roles.map { |r| { id: r.id, name: r.name } },
         project: { id: m.project_id } }
     end
