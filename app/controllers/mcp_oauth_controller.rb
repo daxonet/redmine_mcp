@@ -41,9 +41,10 @@ class McpOauthController < ApplicationController
         %w[mcp_tools mcp:tools].include?(body.fetch('scope', 'mcp_tools'))
       return oauth_error('invalid_client_metadata')
     end
-    app = Doorkeeper::Application.create!(
+    require_relative '../../lib/redmine_mcp/dynamic_client_registration'
+    app = RedmineMcp::DynamicClientRegistration.register!(
       name: body['client_name'].to_s.presence&.truncate(255) || 'MCP client',
-      redirect_uri: uris.uniq.join("\n"), scopes: 'mcp_tools', confidential: false
+      redirect_uris: uris
     )
     render json: {client_id: app.uid, client_id_issued_at: app.created_at.to_i,
                   client_name: app.name, redirect_uris: app.redirect_uri.split,

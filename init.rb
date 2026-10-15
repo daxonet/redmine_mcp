@@ -5,7 +5,7 @@ Redmine::Plugin.register :redmine_mcp do
   name        'Redmine MCP Plugin'
   author      'Redmine MCP'
   description 'Exposes Redmine as a Model Context Protocol (MCP) server with OAuth 2.1 for Claude AI'
-  version     '1.1.0'
+  version     '1.2.0'
 
   requires_redmine version_or_higher: '7.0'
 
