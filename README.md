@@ -87,7 +87,29 @@ npm run lint        # TypeScript
 | Redmine | Database |
 |---|---|
 | 5.1, 6.0, 6.1 | SQLite, MySQL 5.7+, PostgreSQL 14+ |
+| 7.0.2 (validated with Ruby 3.3 / Rails 8.1) | MySQL 8.4 |
 
 ## License
 
 GPL-2.0
+
+### Redmine 7 authorization and write behavior
+
+OAuth tokens retain the user’s Redmine permissions. Project administration,
+versions, categories, wiki, memberships, and time entry writes check the
+corresponding permissions before calling their handlers. Issue writes use
+Redmine safe attributes and workflow checks, including tracker restrictions.
+Issue notes can supply the change reason required by the Daxonet statistics
+plugin; callers can also send an explicit `reason` on `update_issue`.
+
+Issue creation/update and attachment association share a database transaction.
+Invalid or incomplete attachment results return an error and roll back the issue
+and journal changes. Version API `due_date` maps to Redmine’s `effective_date`;
+membership principals use Redmine’s `user_id` foreign key.
+
+Standalone regressions (run from the Redmine installation):
+
+```sh
+bundle exec ruby plugins/redmine_mcp/test/standalone/tool_authorization_test.rb
+bundle exec ruby plugins/redmine_mcp/test/standalone/tool_serialization_test.rb
+```

@@ -1,4 +1,5 @@
 require_dependency File.join(File.dirname(__FILE__), 'lib/redmine_mcp/tools')
+require_dependency File.join(File.dirname(__FILE__), 'lib/redmine_mcp/authorization')
 
 Redmine::Plugin.register :redmine_mcp do
   name        'Redmine MCP Plugin'
