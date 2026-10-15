@@ -1,0 +1,14 @@
+<% if controller.is_a?(Oauth2ApplicationsController) && controller.action_name == 'show' && RedmineMcp::NativeOauth.mcp?(@application) %>
+<h3>MCP authorizations</h3>
+<p>Uses this application's native OAuth grants. Users can also revoke access in My account → Authorized applications.</p>
+<% tokens = Doorkeeper::AccessToken.where(application_id: @application.id, revoked_at: nil).order(:resource_owner_id, :created_at).to_a %>
+<% users = User.where(id: tokens.map(&:resource_owner_id)).index_by(&:id) %>
+<table class="list" id="mcp-native-authorizations"><thead><tr><th>User</th><th>Access expires</th><th>Refresh expires</th><th></th></tr></thead><tbody>
+<% tokens.each do |token| %><tr>
+<td><%= users[token.resource_owner_id]&.login || token.resource_owner_id %></td>
+<td><%= token.expires_at && format_time(token.expires_at) %></td>
+<td><%= token.mcp_refresh_expires_at && format_time(token.mcp_refresh_expires_at) %></td>
+<td><%= link_to 'Revoke user access', mcp_application_authorization_path(application_id: @application.id, user_id: token.resource_owner_id), method: :delete, data: {confirm: 'Revoke all authorizations for this user and application?'} %></td>
+</tr><% end %></tbody></table>
+<p><%= link_to 'MCP registration settings', plugin_settings_path(:redmine_mcp) %></p>
+<% end %>

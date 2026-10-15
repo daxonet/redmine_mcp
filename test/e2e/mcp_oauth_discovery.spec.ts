@@ -7,8 +7,8 @@ test.describe("MCP OAuth Discovery", () => {
     );
     expect(resp.ok()).toBeTruthy();
     const json = await resp.json();
-    expect(json.authorization_endpoint).toContain("/mcp/oauth/authorize");
-    expect(json.token_endpoint).toContain("/mcp/oauth/token");
+    expect(json.authorization_endpoint).toContain("/oauth/authorize");
+    expect(json.token_endpoint).toContain("/oauth/token");
     expect(json.registration_endpoint).toContain("/mcp/oauth/register");
     expect(json.code_challenge_methods_supported).toContain("S256");
   });
@@ -20,7 +20,7 @@ test.describe("MCP OAuth Discovery", () => {
     expect(resp.ok()).toBeTruthy();
     const json = await resp.json();
     expect(json.resource).toContain("/mcp");
-    expect(json.scopes_supported).toContain("mcp:tools");
+    expect(json.scopes_supported).toContain("mcp_tools");
   });
 
   test("mcp endpoint returns 401 without token", async ({ request }) => {

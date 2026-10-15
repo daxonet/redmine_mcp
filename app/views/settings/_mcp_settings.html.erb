@@ -1,0 +1,5 @@
+<p><label>Trusted MCP callback URLs</label>
+<%= text_area_tag 'settings[allowed_redirect_uris]', @settings['allowed_redirect_uris'], rows: 6, cols: 70 %></p>
+<p>One exact URL per line. An empty list disables dynamic client registration.
+Applications and user authorizations are managed by Redmine's native OAuth server.</p>
+<p><%= link_to 'Applications', oauth_applications_path %></p>
