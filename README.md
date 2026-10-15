@@ -1,4 +1,4 @@
-# Redmine MCP 1.1.0 — native OAuth
+# Redmine MCP 1.2.0 — native OAuth, clean reconnect
 
 Requires Redmine 7.0+. MCP tools always enforce the signed-in user's Redmine project, issue, workflow and write permissions. An OAuth scope never grants additional business rights.
 
@@ -10,12 +10,16 @@ Enable Redmine REST API for native OAuth. Configure **Administration → Plugins
 
 1. Stop the application and take a complete database + application/files backup.
 2. Upgrade Redmine core and migrate it first; deploy this plugin and run `bundle exec rake redmine:plugins:migrate NAME=redmine_mcp RAILS_ENV=production`.
-3. The migration imports client IDs, still-valid access/refresh tokens, and unexpired PKCE grants into the native OAuth tables. Secrets are hashed with Redmine's configured strategy, and original expiry bounds are retained. Legacy client secrets were never issued, so migrated clients are public. UID collisions or invalid client records abort the import; fix the source and retry, never bypass the check.
-4. Verify Applications, discovery, an existing client's refresh, new authorization, MCP read/write permissions and revocation before reopening traffic.
+3. Version 1.2.0 deliberately clears historical MCP applications, grants and tokens after the 1.1.0 migration step. Existing MCP connections become invalid; users must remove/reconnect the server in their MCP client and authorize again. This is a one-time migration, including for installations already on 1.1.0. Unrelated native OAuth applications and the separate Azure AD login-provider configuration are preserved.
+4. Verify that old client IDs/tokens are rejected and historical duplicates are absent; reconnect a client and check discovery, fresh S256 authorization, MCP permissions, token refresh and per-user revocation before reopening traffic.
 
-Existing `/mcp/oauth/authorize` and `/mcp/oauth/token` URLs remain compatibility routes to the native server; the old `mcp:tools` authorization scope is normalized to `mcp_tools` at the compatibility authorization URL. Already-open old consent pages need a new authorization attempt. Legacy tables are retained for audit/backup only: runtime never accepts their credentials, and rerunning the importer can undo revocations and is forbidden. Keep backup/database access restricted since old tables still contain legacy plaintext credentials.
+Existing `/mcp/oauth/authorize` and `/mcp/oauth/token` URLs remain compatibility routes to the native server; the old `mcp:tools` authorization scope is normalized to `mcp_tools` at the compatibility authorization URL. Already-open old consent pages need a new authorization attempt. Legacy client metadata remains for audit only; legacy token and authorization-code rows are deleted. Runtime never accepts legacy credentials, and rerunning the historical importer is forbidden. Keep pre-upgrade backups restricted since they contain legacy plaintext credentials.
 
 Rollback restores the pre-upgrade database and matching old application together. The migration deliberately has no lossy down conversion from hashed native secrets. Do not run the old plugin against the migrated database.
+
+## Dynamic registration
+
+Identical public-client name, canonical callback URL set and MCP scope reuse one native Application, backed by a unique database registration key. URI ordering/duplicates and the old `mcp:tools` scope do not create duplicates. Each user has separate grants and tokens; reconnecting another user does not revoke existing grants. Different metadata creates a separate application. An administrator-edited client is not reused for mismatching metadata. Do not merge by display name alone.
 
 ## Tests
 
