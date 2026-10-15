@@ -86,7 +86,7 @@ npm run lint        # TypeScript
 
 | Redmine | Database |
 |---|---|
-| 5.1, 6.0, 6.1 | SQLite, MySQL 5.7+, PostgreSQL 14+ |
+| 6.0, 6.1 | SQLite, MySQL 8+, PostgreSQL 14+ |
 | 7.0.2 (validated with Ruby 3.3 / Rails 8.1) | MySQL 8.4 |
 
 ## License
@@ -110,6 +110,8 @@ membership principals use Redmine’s `user_id` foreign key.
 Standalone regressions (run from the Redmine installation):
 
 ```sh
-bundle exec ruby plugins/redmine_mcp/test/standalone/tool_authorization_test.rb
-bundle exec ruby plugins/redmine_mcp/test/standalone/tool_serialization_test.rb
+bundle exec ruby plugins/redmine_mcp/test/standalone/tool_authorization_check.rb
+bundle exec ruby plugins/redmine_mcp/test/standalone/tool_serialization_check.rb
 ```
+
+The OAuth migrations use ActiveRecord 7 migration APIs, so Redmine 6.0 is the minimum supported release. Standalone checks run in their own Ruby processes; they intentionally do not match Rails’ `*_test.rb` discovery pattern because their lightweight model doubles must not replace real ActiveRecord classes.

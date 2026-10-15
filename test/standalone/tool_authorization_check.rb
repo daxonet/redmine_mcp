@@ -1,5 +1,5 @@
 # Run without a Redmine database, with ActiveSupport available:
-# bundle exec ruby plugins/redmine_mcp/test/standalone/tool_authorization_test.rb
+# bundle exec ruby plugins/redmine_mcp/test/standalone/tool_authorization_check.rb
 require 'minitest/autorun'
 require 'ostruct'
 require 'active_support/core_ext/object/blank'
