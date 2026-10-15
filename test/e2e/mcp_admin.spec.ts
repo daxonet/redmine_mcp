@@ -5,7 +5,7 @@ async function loginAsAdmin(page: import("@playwright/test").Page) {
   await page.fill("input[name='username']", "admin");
   await page.fill("input[name='password']", "redmineadmin");
   await page.click("input[type='submit']");
-  await expect(page.locator("#loggedas")).toContainText("admin");
+  await page.waitForURL("**/my/page");
 }
 
 test.describe("MCP Admin", () => {

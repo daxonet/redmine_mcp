@@ -1,4 +1,6 @@
 <% if controller.is_a?(Oauth2ApplicationsController) && controller.action_name == 'show' && RedmineMcp::NativeOauth.mcp?(@application) %>
+<style>#content .autoscroll a.icon-authorize {display:none}</style>
+<p>Start the connection from your MCP client. This page manages the application and its authorizations.</p>
 <h3>MCP authorizations</h3>
 <p>Uses this application's native OAuth grants. Users can also revoke access in My account → Authorized applications.</p>
 <% tokens = Doorkeeper::AccessToken.where(application_id: @application.id, revoked_at: nil).order(:resource_owner_id, :created_at).to_a %>
