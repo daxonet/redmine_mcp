@@ -95,7 +95,8 @@ class McpReconnectionTest < Redmine::IntegrationTest
       refresh_token: 'legacy-test-refresh', scopes: 'mcp:tools', expires_at: 1.hour.from_now,
       refresh_expires_at: 1.day.from_now)
     McpOauthAuthCode.create!(client_id: old.client_id, user_id: 1, code: 'legacy-test-code',
-      redirect_uri: CALLBACK, scopes: 'mcp:tools', expires_at: 10.minutes.from_now)
+      redirect_uri: CALLBACK, scopes: 'mcp:tools', code_challenge: 'a' * 43,
+      code_challenge_method: 'S256', expires_at: 10.minutes.from_now)
     grant = Doorkeeper::AccessGrant.create!(application_id: app.id, resource_owner_id: 1,
       redirect_uri: CALLBACK, scopes: 'mcp_tools', expires_in: 600)
     other = Doorkeeper::Application.create!(name: 'Unrelated native OAuth', redirect_uri: SECOND,
@@ -109,7 +110,8 @@ class McpReconnectionTest < Redmine::IntegrationTest
       headers: {'Content-Type' => 'application/json', 'Authorization' => "Bearer #{access}"}
     assert_response :unauthorized
     post '/oauth/token', params: {grant_type: 'refresh_token', client_id: old.client_id, refresh_token: refresh}
-    assert_response :unauthorized
+    assert_response :bad_request
+    assert_equal 'invalid_grant', JSON.parse(response.body)['error']
     assert_equal 0, McpOauthToken.count
     assert_equal 0, McpOauthAuthCode.count
     assert_not Doorkeeper::Application.exists?(app.id)
