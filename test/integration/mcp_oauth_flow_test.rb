@@ -331,6 +331,25 @@ class McpOauthFlowTest < Redmine::IntegrationTest
     assert_response :forbidden
   end
 
+  def test_native_authorization_accepts_default_and_legacy_scope
+    app = native_app
+    log_user('jsmith', 'jsmith')
+    [nil, 'mcp:tools'].each do |scope|
+      get '/oauth/authorize', params: {client_id: app.uid, redirect_uri: CALLBACK, response_type: 'code',
+        scope: scope, code_challenge: @challenge, code_challenge_method: 'S256'}
+      assert_response :success
+      assert_select 'input[name=scope][value=mcp_tools]'
+    end
+  end
+
+  def test_legacy_explicit_refresh_scope_is_normalized
+    app, j = issue
+    post '/mcp/oauth/token', params: {grant_type: 'refresh_token', client_id: app.uid,
+      refresh_token: j['refresh_token'], scope: 'mcp:tools'}
+    assert_response :success
+    assert_equal 'mcp_tools', JSON.parse(response.body)['scope']
+  end
+
   def test_import_collision_fails_atomically
     native_app.update!(uid: 'collision')
     McpOauthClient.create!(client_id: 'collision', redirect_uris: [CALLBACK])

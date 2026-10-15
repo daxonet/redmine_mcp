@@ -26,6 +26,7 @@ module RedmineMcp
       def valid_mcp_authorization?
         app = Doorkeeper::Application.find_by(uid: params[:client_id])
         return true unless NativeOauth.mcp?(app)
+        params[:scope] = SCOPE if params[:scope].blank? || params[:scope] == 'mcp:tools'
         challenge = params[:code_challenge].to_s
         return true if params[:code_challenge_method] == 'S256' && challenge.match?(/\A[A-Za-z0-9_-]{43}\z/)
         render json: {error: 'invalid_request', error_description: 'MCP requires S256 PKCE'}, status: :bad_request
@@ -35,7 +36,10 @@ module RedmineMcp
 
     module TokenPolicy
       def create
-        params[:scope] = SCOPE if params[:scope] == 'mcp:tools'
+        if params[:scope] == 'mcp:tools'
+          params[:scope] = SCOPE
+          request.parameters['scope'] = SCOPE
+        end
         record = case params[:grant_type]
                  when 'refresh_token'
                    Doorkeeper::AccessToken.by_refresh_token(params[:refresh_token].to_s)
