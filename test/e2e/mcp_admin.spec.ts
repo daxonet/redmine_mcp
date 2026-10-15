@@ -12,19 +12,17 @@ test.describe("MCP Admin", () => {
   test("admin page loads", async ({ page, browserName }) => {
     await loginAsAdmin(page);
     await page.goto("http://localhost:3000/admin/mcp/tokens");
-    await expect(page.locator("h2")).toContainText("MCP Authorizations");
+    await expect(page.locator("h2")).toContainText("Applications");
     await page.screenshot({
       path: `artifacts/e2e/mcp_admin_${browserName}.png`,
       fullPage: true,
     });
   });
 
-  test("trusted URI section visible", async ({ page }) => {
+  test("trusted URLs live in plugin settings", async ({ page }) => {
     await loginAsAdmin(page);
-    await page.goto("http://localhost:3000/admin/mcp/tokens");
-    await expect(page.locator("h3").first()).toContainText(
-      "Trusted Redirect URIs",
-    );
+    await page.goto("http://localhost:3000/settings/plugin/redmine_mcp");
+    await expect(page.locator("textarea[name='settings[allowed_redirect_uris]']")).toBeVisible();
   });
 
   test("non-admin cannot access admin page", async ({ page }) => {
@@ -33,6 +31,6 @@ test.describe("MCP Admin", () => {
     await page.fill("input[name='password']", "jsmith");
     await page.click("input[type='submit']");
     await page.goto("http://localhost:3000/admin/mcp/tokens");
-    await expect(page).not.toHaveURL(/admin\/mcp\/tokens/);
+    await expect(page.locator("#content")).toContainText("not authorized");
   });
 });

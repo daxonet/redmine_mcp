@@ -1,117 +1,22 @@
-# Redmine MCP Plugin
+# Redmine MCP 1.1.0 — native OAuth
 
-A Redmine plugin that exposes Redmine as a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server with OAuth 2.1 authentication, enabling Claude AI and other MCP clients to access Redmine data.
+Requires Redmine 7.0+. MCP tools always enforce the signed-in user's Redmine project, issue, workflow and write permissions. An OAuth scope never grants additional business rights.
 
-## Features
+Applications are managed in **Administration → Applications**. Open an MCP application to inspect authorizations and revoke access for one user; deleting an application revokes every grant. Users can revoke their own grants in **My account → Authorized applications**. There is no separate MCP authorization menu.
 
-- **MCP Server** — Streamable HTTP transport at `/mcp` with 10 tools
-- **OAuth 2.1 + PKCE** — Authorization Code flow with S256 code challenge
-- **Dynamic Client Registration** — RFC 7591 compliant at `/mcp/oauth/register`
-- **SSO-compatible consent page** — Uses existing Redmine session, no password re-entry
-- **Admin panel** — View, filter, and revoke OAuth authorizations at `/admin/mcp/tokens`
-- **Trusted URI whitelist** — Admin-controlled redirect URI allowlist
+Enable Redmine REST API for native OAuth. Configure **Administration → Plugins → Redmine MCP → Configure** with exact trusted callback URLs. An empty allowlist disables dynamic registration. Public MCP clients request `mcp_tools` and must use S256 PKCE. Manually registered Applications must include that scope. Discovery points to `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`; MCP dynamic registration remains `/mcp/oauth/register`. Only MCP-scoped applications receive the PKCE/one-hour access/30-day rolling refresh policies. Other OAuth apps retain Redmine defaults.
 
-## MCP Tools
+## Upgrade from 1.0.x
 
-| Tool | Description |
-|---|---|
-| `list_projects` | List visible projects |
-| `get_project` | Get project details |
-| `list_issues` | List issues with filters |
-| `get_issue` | Get issue details |
-| `create_issue` | Create a new issue |
-| `update_issue` | Update an existing issue |
-| `list_users` | List users (admin only) |
-| `search` | Full-text search |
-| `list_time_entries` | List time entries |
-| `create_time_entry` | Log time on an issue |
+1. Stop the application and take a complete database + application/files backup.
+2. Upgrade Redmine core and migrate it first; deploy this plugin and run `bundle exec rake redmine:plugins:migrate NAME=redmine_mcp RAILS_ENV=production`.
+3. The migration imports client IDs, still-valid access/refresh tokens, and unexpired PKCE grants into the native OAuth tables. Secrets are hashed with Redmine's configured strategy, and original expiry bounds are retained. Legacy client secrets were never issued, so migrated clients are public. UID collisions or invalid client records abort the import; fix the source and retry, never bypass the check.
+4. Verify Applications, discovery, an existing client's refresh, new authorization, MCP read/write permissions and revocation before reopening traffic.
 
-## Installation
+Existing `/mcp/oauth/authorize` and `/mcp/oauth/token` URLs remain compatibility routes to the native server; the old `mcp:tools` authorization scope is normalized to `mcp_tools` at the compatibility authorization URL. Already-open old consent pages need a new authorization attempt. Legacy tables are retained for audit/backup only: runtime never accepts their credentials, and rerunning the importer can undo revocations and is forbidden. Keep backup/database access restricted since old tables still contain legacy plaintext credentials.
 
-1. Clone this plugin into Redmine's `plugins/` directory:
-   ```sh
-   git clone https://github.com/your-org/redmine_mcp plugins/redmine_mcp
-   ```
+Rollback restores the pre-upgrade database and matching old application together. The migration deliberately has no lossy down conversion from hashed native secrets. Do not run the old plugin against the migrated database.
 
-2. Run migrations:
-   ```sh
-   bundle exec rake redmine:plugins:migrate RAILS_ENV=production
-   ```
+## Tests
 
-3. Restart Redmine.
-
-## Usage with Claude AI
-
-1. In Claude, add a new MCP connector with URL `https://your-redmine-host/mcp`
-2. Claude will initiate the OAuth flow and open your browser
-3. Log in to Redmine and click **Authorize**
-4. Claude now has access to your Redmine data
-
-## Admin Configuration
-
-Navigate to **Administration → MCP Authorizations** to:
-- View all active OAuth tokens
-- Filter by user, client name, or status
-- Revoke individual tokens or all tokens for a user
-- Manage trusted redirect URI whitelist
-
-## Development
-
-### Setup (Dev Container)
-
-Open in VS Code with the Dev Containers extension. The container will:
-- Install Redmine 5.1, 6.0, and 6.1
-- Symlink this plugin into each version
-- Set up test databases
-
-### Run Unit/Functional/Integration Tests
-
-```sh
-RAILS_ENV=test bundle exec rake redmine:plugins:test NAME=redmine_mcp
-```
-
-### Run E2E Tests
-
-```sh
-npx playwright test --reporter list --workers 1
-```
-
-### Lint
-
-```sh
-npm run lint        # TypeScript
-```
-
-## Compatibility
-
-| Redmine | Database |
-|---|---|
-| 6.0, 6.1 | SQLite, MySQL 8+, PostgreSQL 14+ |
-| 7.0.2 (validated with Ruby 3.3 / Rails 8.1) | MySQL 8.4 |
-
-## License
-
-GPL-2.0
-
-### Redmine 7 authorization and write behavior
-
-OAuth tokens retain the user’s Redmine permissions. Project administration,
-versions, categories, wiki, memberships, and time entry writes check the
-corresponding permissions before calling their handlers. Issue writes use
-Redmine safe attributes and workflow checks, including tracker restrictions.
-Issue notes can supply the change reason required by the Daxonet statistics
-plugin; callers can also send an explicit `reason` on `update_issue`.
-
-Issue creation/update and attachment association share a database transaction.
-Invalid or incomplete attachment results return an error and roll back the issue
-and journal changes. Version API `due_date` maps to Redmine’s `effective_date`;
-membership principals use Redmine’s `user_id` foreign key.
-
-Standalone regressions (run from the Redmine installation):
-
-```sh
-bundle exec ruby plugins/redmine_mcp/test/standalone/tool_authorization_check.rb
-bundle exec ruby plugins/redmine_mcp/test/standalone/tool_serialization_check.rb
-```
-
-The OAuth migrations use ActiveRecord 7 migration APIs, so Redmine 6.0 is the minimum supported release. Standalone checks run in their own Ruby processes; they intentionally do not match Rails’ `*_test.rb` discovery pattern because their lightweight model doubles must not replace real ActiveRecord classes.
+Run `RAILS_ENV=test bundle exec rake redmine:plugins:test NAME=redmine_mcp` against a dedicated test database. Standalone checks run separately: `ruby test/standalone/tool_authorization_check.rb` and `ruby test/standalone/tool_serialization_check.rb`. CI covers Redmine 7 with MySQL, PostgreSQL and SQLite. Native OAuth integration tests cover migration, PKCE, token rotation, expiry, user lock, scopes, revocation and compatibility URLs.

@@ -37,11 +37,11 @@ class McpController < ApplicationController
       render_www_authenticate and return nil
     end
     token_str = raw[7..]
-    mcp_token = McpOauthToken.find_by_access_token(token_str)
-    unless mcp_token
+    mcp_token = Doorkeeper::AccessToken.by_token(token_str)
+    unless mcp_token&.acceptable?('mcp_tools')
       render_www_authenticate and return nil
     end
-    user = User.find_by(id: mcp_token.user_id)
+    user = User.find_by(id: mcp_token.resource_owner_id)
     unless user&.active?
       render_www_authenticate and return nil
     end
@@ -131,7 +131,7 @@ class McpController < ApplicationController
     jsonrpc_result(id, {
       protocolVersion: '2025-03-26',
       capabilities:    { tools: { listChanged: false } },
-      serverInfo:      { name: 'redmine-mcp', version: '1.0.0' }
+      serverInfo:      { name: 'redmine-mcp', version: Redmine::Plugin.find(:redmine_mcp).version }
     })
   end
 
