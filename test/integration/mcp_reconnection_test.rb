@@ -3,24 +3,20 @@ require File.expand_path('../../test_helper', __FILE__)
 require_relative '../../db/migrate/20261015000005_reset_mcp_clients_for_reconnection'
 
 class McpReconnectionTest < Redmine::IntegrationTest
-  fixtures :users
-  CALLBACK = 'https://example.com/cb'
+  include McpTestSetup
+  fixtures :users, :email_addresses, :user_preferences
   SECOND = 'https://example.com/other'
 
   def setup
     super
     Setting.rest_api_enabled = '1'
-    Setting.plugin_redmine_mcp = {'allowed_redirect_uris' => "#{CALLBACK}\n#{SECOND}"}
-    McpOauthToken.delete_all
-    McpOauthAuthCode.delete_all
-    McpOauthClient.delete_all
-    Doorkeeper::AccessGrant.delete_all
-    Doorkeeper::AccessToken.delete_all
-    Doorkeeper::Application.delete_all
+    mcp_settings('allowed_redirect_uris' => "#{CALLBACK}\n#{SECOND}")
+    RedmineMcp::Backend.stubs(:available?).returns(true)
+    reset_oauth_tables
   end
 
-  def register(name: 'Claude', uris: [CALLBACK], scope: 'mcp_tools')
-    post '/mcp/oauth/register', params: {client_name: name, redirect_uris: uris, scope: scope}.to_json,
+  def register(name: 'Claude', uris: [CALLBACK], scope: nil)
+    post '/mcp/oauth/register', params: {client_name: name, redirect_uris: uris, scope: scope}.compact.to_json,
       headers: {'Content-Type' => 'application/json'}
     assert_response :created
     JSON.parse(response.body)
@@ -32,9 +28,17 @@ class McpReconnectionTest < Redmine::IntegrationTest
     assert_equal 1, Doorkeeper::Application.count
   end
 
-  def test_uri_order_duplicates_and_old_scope_do_not_create_duplicates
+  def test_changed_scope_setting_registers_a_new_application
+    first = register
+    mcp_settings('allowed_redirect_uris' => CALLBACK, 'scopes' => 'view_issues')
+    second = register
+    assert_not_equal first['client_id'], second['client_id']
+    assert_equal 'view_issues', second['scope']
+  end
+
+  def test_uri_order_duplicates_and_requested_scope_do_not_create_duplicates
     first = register(uris: [CALLBACK, SECOND])
-    second = register(uris: [SECOND, CALLBACK, SECOND], scope: 'mcp:tools')
+    second = register(uris: [SECOND, CALLBACK, SECOND], scope: 'admin view_issues')
     assert_equal first['client_id'], second['client_id']
     assert_equal 1, Doorkeeper::Application.count
   end
@@ -49,7 +53,7 @@ class McpReconnectionTest < Redmine::IntegrationTest
   def test_repeat_registration_preserves_existing_user_tokens
     app = Doorkeeper::Application.find_by!(uid: register['client_id'])
     token = Doorkeeper::AccessToken.create!(application_id: app.id, resource_owner_id: 1,
-      scopes: 'mcp_tools', expires_in: 3600)
+      scopes: SCOPES, expires_in: 3600)
     assert_equal app.uid, register['client_id']
     assert_nil token.reload.revoked_at
     assert_equal 1, Doorkeeper::AccessToken.count
@@ -72,7 +76,7 @@ class McpReconnectionTest < Redmine::IntegrationTest
     assert_raises(ActiveRecord::RecordNotUnique) do
       Doorkeeper::Application.transaction(requires_new: true) do
         Doorkeeper::Application.create!(name: 'Duplicate', redirect_uri: CALLBACK,
-          scopes: 'mcp_tools', confidential: false, mcp_registration_key: app.mcp_registration_key)
+          scopes: SCOPES, confidential: false, mcp_registration_key: app.mcp_registration_key)
       end
     end
     assert_equal 1, Doorkeeper::Application.count
@@ -88,8 +92,7 @@ class McpReconnectionTest < Redmine::IntegrationTest
       scopes: 'mcp_tools', expires_in: 3600, use_refresh_token: true)
     access = token.plaintext_token
     refresh = token.plaintext_refresh_token
-    post '/mcp', params: {jsonrpc: '2.0', id: 1, method: 'initialize', params: {}}.to_json,
-      headers: {'Content-Type' => 'application/json', 'Authorization' => "Bearer #{access}"}
+    get '/users/current.json', headers: {'Authorization' => "Bearer #{access}"}
     assert_response :success
     McpOauthToken.create!(client_id: old.client_id, user_id: 1, access_token: 'legacy-test-access',
       refresh_token: 'legacy-test-refresh', scopes: 'mcp:tools', expires_at: 1.hour.from_now,
@@ -106,8 +109,7 @@ class McpReconnectionTest < Redmine::IntegrationTest
     # Schema is already migrated for the test DB; run the exact migration cleanup.
     migration = ResetMcpClientsForReconnection.new
     migration.reset_mcp_authorizations
-    post '/mcp', params: {jsonrpc: '2.0', id: 1, method: 'initialize', params: {}}.to_json,
-      headers: {'Content-Type' => 'application/json', 'Authorization' => "Bearer #{access}"}
+    get '/users/current.json', headers: {'Authorization' => "Bearer #{access}"}
     assert_response :unauthorized
     post '/oauth/token', params: {grant_type: 'refresh_token', client_id: old.client_id, refresh_token: refresh}
     assert_response :bad_request
@@ -122,5 +124,20 @@ class McpReconnectionTest < Redmine::IntegrationTest
     assert_equal 1, McpOauthClient.count # Metadata for audit only.
     assert_not_equal old.client_id, register['client_id']
     assert_equal 2, Doorkeeper::Application.count
+  end
+
+  def test_retire_migration_removes_only_legacy_mcp_applications
+    require_relative '../../db/migrate/20261117000006_retire_builtin_mcp_tools'
+    legacy = Doorkeeper::Application.create!(name: 'Old MCP', redirect_uri: CALLBACK, scopes: 'mcp_tools', confidential: false)
+    legacy_token = Doorkeeper::AccessToken.create!(application_id: legacy.id, resource_owner_id: 1, scopes: 'mcp_tools', expires_in: 3600)
+    mixed = Doorkeeper::Application.create!(name: 'Manual', redirect_uri: CALLBACK, scopes: 'mcp_tools view_issues', confidential: true)
+    current = Doorkeeper::Application.find_by!(uid: register['client_id'])
+    other = Doorkeeper::Application.create!(name: 'Azure SSO', redirect_uri: SECOND, scopes: '', confidential: true)
+    ActiveRecord::Migration.suppress_messages { RetireBuiltinMcpTools.new.up }
+    assert_not Doorkeeper::Application.exists?(legacy.id)
+    assert_not Doorkeeper::AccessToken.exists?(legacy_token.id)
+    assert Doorkeeper::Application.exists?(mixed.id)
+    assert Doorkeeper::Application.exists?(current.id)
+    assert Doorkeeper::Application.exists?(other.id)
   end
 end

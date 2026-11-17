@@ -17,20 +17,6 @@ permissions:
   contents: read
 
 jobs:
-  standalone:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-      - name: Install standalone check dependencies
-        run: gem install minitest:6.0.6 activesupport:8.1.4 --no-document
-      - name: Check tool permissions and serialization without model pollution
-        run: |
-          ruby test/standalone/tool_authorization_check.rb
-          ruby test/standalone/tool_serialization_check.rb
-
   mysql80:
     uses: 9506hqwy/actions/.github/workflows/redmine-ci-mysql80.yml@main
     with:

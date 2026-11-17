@@ -13,6 +13,7 @@ test.describe("MCP OAuth Discovery", () => {
     expect(json.code_challenge_methods_supported).toContain("S256");
   });
 
+  // Requires RedmineUP Agent with its MCP server enabled.
   test("protected resource metadata", async ({ request }) => {
     const resp = await request.get(
       "http://localhost:3000/.well-known/oauth-protected-resource",
@@ -20,7 +21,8 @@ test.describe("MCP OAuth Discovery", () => {
     expect(resp.ok()).toBeTruthy();
     const json = await resp.json();
     expect(json.resource).toContain("/mcp");
-    expect(json.scopes_supported).toContain("mcp_tools");
+    expect(json.scopes_supported).toContain("view_issues");
+    expect(json.scopes_supported).not.toContain("admin");
   });
 
   test("mcp endpoint returns 401 without token", async ({ request }) => {

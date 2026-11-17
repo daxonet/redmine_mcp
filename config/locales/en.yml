@@ -6,4 +6,4 @@ en:
   notice_mcp_token_revoked: "Authorization revoked."
   notice_mcp_user_tokens_revoked: "All authorizations for user revoked."
 
-  permission_mcp_tools: "Use MCP tools within your Redmine permissions"
+  permission_mcp_tools: "Legacy MCP connection (unused since Redmine MCP 2.0)"

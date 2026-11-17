@@ -1,5 +1,36 @@
-<p><label>Trusted MCP callback URLs</label>
-<%= text_area_tag 'settings[allowed_redirect_uris]', @settings['allowed_redirect_uris'], rows: 6, cols: 70 %></p>
-<p>One exact URL per line. An empty list disables dynamic client registration.
-Applications and user authorizations are managed by Redmine's native OAuth server.</p>
-<p><%= link_to 'Applications', oauth_applications_path %></p>
+<% backend = RedmineMcp::Backend %>
+<fieldset class="box">
+<legend>Status</legend>
+<ul>
+  <li>RedmineUP Agent installed: <strong><%= backend.installed? ? 'yes' : 'no' %></strong></li>
+  <li>RedmineUP Agent MCP server enabled: <strong><%= backend.mcp_enabled? ? 'yes' : 'no' %></strong>
+    <% if backend.installed? %>(<%= link_to 'RedmineUP Agent settings', plugin_settings_path(:redmineup_agent) %>)<% end %></li>
+  <li>REST API enabled: <strong><%= Setting.rest_api_enabled? ? 'yes' : 'no' %></strong></li>
+  <li>MCP endpoint: <code><%= "#{request.base_url}/mcp" %></code></li>
+</ul>
+<% unless backend.available? %>
+<p class="warning">Clients cannot connect until RedmineUP Agent's MCP server and the REST API are enabled.</p>
+<% end %>
+</fieldset>
+
+<p><label>Trusted callback URLs</label>
+<%= text_area_tag 'settings[allowed_redirect_uris]', @settings['allowed_redirect_uris'], rows: 10, cols: 70 %>
+<em class="info">For dynamic client registration. One URL per line. <code>*</code> matches one run of characters
+without <code>/ ? # @</code>, e.g. <code>http://localhost:*/callback</code> or
+<code>https://chatgpt.com/connector/oauth/*</code>. Plain http is accepted only for localhost/127.0.0.1.
+An empty list disables dynamic registration.</em></p>
+
+<p><label>Trusted client metadata hosts</label>
+<%= text_area_tag 'settings[cimd_trusted_hosts]', @settings['cimd_trusted_hosts'], rows: 4, cols: 70 %>
+<em class="info">Client ID Metadata Documents (used by Claude and ChatGPT) are fetched only from these hosts.
+One host per line; <code>*.example.com</code> matches subdomains. An empty list disables this method.
+Redmine must be able to reach these hosts over HTTPS.</em></p>
+
+<p><label>Scopes for self-registered clients</label>
+<%= text_area_tag 'settings[scopes]', @settings['scopes'], rows: 3, cols: 70 %>
+<em class="info">Redmine permission names, separated by spaces. Leave empty to use RedmineUP Agent's MCP scopes.
+<code>admin</code> is never granted. Users still act only within their own Redmine permissions.
+Effective now: <code><%= backend.scope_string.presence || '(none)' %></code></em></p>
+
+<p>Clients that need a client secret (for example Microsoft Copilot) must use a manually created
+<%= link_to 'application', oauth_applications_path %> with the redirect URL they provide.</p>

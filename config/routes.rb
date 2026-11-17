@@ -20,8 +20,7 @@ RedmineApp::Application.routes.draw do
   # Consent / login page
   get  '/mcp/consent', to: 'mcp_oauth#authorize'
 
-  # MCP protocol endpoint (Streamable HTTP)
-  match '/mcp', to: 'mcp#handle', via: %i[get post delete options]
+  # The MCP endpoint itself (/mcp) is served by RedmineUP Agent.
 
   delete '/oauth/applications/:application_id/mcp_authorizations/:user_id', to: 'mcp_application_authorizations#destroy', as: :mcp_application_authorization
 

@@ -1,26 +1,55 @@
-# Redmine MCP 1.2.0 — native OAuth, clean reconnect
+# Redmine MCP 2.0 — zero-configuration sign-in for RedmineUP Agent
 
-Requires Redmine 7.0+. MCP tools always enforce the signed-in user's Redmine project, issue, workflow and write permissions. An OAuth scope never grants additional business rights.
+Requires Redmine 7.0+ and **RedmineUP Agent** (`redmineup_agent`) with its MCP server enabled.
 
-Applications are managed in **Administration → Applications**. Open an MCP application to inspect authorizations and revoke access for one user; deleting an application revokes every grant. Users can revoke their own grants in **My account → Authorized applications**. There is no separate MCP authorization menu.
+Since 2.0 this plugin no longer serves MCP tools. The `/mcp` endpoint and all tools come from RedmineUP Agent, which also exposes the RedmineUP plugins (Agile, Helpdesk, CRM, Invoices, …). This plugin adds what RedmineUP Agent leaves to the administrator: clients connect by URL alone, without anyone creating an OAuth application and handing out a client ID and secret.
 
-Enable Redmine REST API for native OAuth. Configure **Administration → Plugins → Redmine MCP → Configure** with exact trusted callback URLs. An empty allowlist disables dynamic registration. Public MCP clients request `mcp_tools` and must use S256 PKCE. Manually registered Applications must include that scope. Discovery points to `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`; MCP dynamic registration remains `/mcp/oauth/register`. Only MCP-scoped applications receive the PKCE/one-hour access/30-day rolling refresh policies. Other OAuth apps retain Redmine defaults.
+| Client | How it signs in | Administrator work |
+|---|---|---|
+| claude.ai, Claude Desktop, mobile | Client ID Metadata Document (falls back to DCR) | none |
+| Claude Code | Client ID Metadata Document, loopback redirect on any port | none |
+| ChatGPT | Client ID Metadata Document or DCR | none |
+| VS Code / GitHub Copilot | Dynamic Client Registration (DCR) | none |
+| Microsoft Copilot, other clients that need a secret | — | create an application manually in **Administration → Applications** |
 
-## Upgrade from 1.0.x
+## What the plugin provides
 
-1. Stop the application and take a complete database + application/files backup.
-2. Upgrade Redmine core and migrate it first; deploy this plugin and run `bundle exec rake redmine:plugins:migrate NAME=redmine_mcp RAILS_ENV=production`.
-3. Version 1.2.0 deliberately clears historical MCP applications, grants and tokens after the 1.1.0 migration step. Existing MCP connections become invalid; users must remove/reconnect the server in their MCP client and authorize again. This is a one-time migration, including for installations already on 1.1.0. Unrelated native OAuth applications and the separate Azure AD login-provider configuration are preserved.
-4. Verify that old client IDs/tokens are rejected and historical duplicates are absent; reconnect a client and check discovery, fresh S256 authorization, MCP permissions, token refresh and per-user revocation before reopening traffic.
+- `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource[/mcp]`, pointing clients to Redmine's native OAuth server (`/oauth/authorize`, `/oauth/token`, `/oauth/revoke`) and advertising the MCP scopes. These routes take precedence over RedmineUP Agent's own discovery documents.
+- **Dynamic Client Registration** at `/mcp/oauth/register` for public clients (`token_endpoint_auth_method: none`). Callback URLs must match the trusted list. Identical registrations reuse one application.
+- **Client ID Metadata Documents**: a client whose `client_id` is an https URL on a trusted host (default `claude.ai`, `chatgpt.com`) is fetched once per hour and materialised as a public application with that URL as its client ID.
+- Policies for these applications only: mandatory S256 PKCE, one-hour access tokens, rotating 30-day refresh tokens, rejection of locked users. Other OAuth applications keep Redmine's defaults.
+- Port-agnostic matching of `http://localhost/...` loopback redirects (Doorkeeper already does this for `127.0.0.1`), as required by Claude Code.
+- Per-user revocation on the application page in **Administration → Applications**. Users can revoke their own access in **My account → Authorized applications**.
 
-Existing `/mcp/oauth/authorize` and `/mcp/oauth/token` URLs remain compatibility routes to the native server; the old `mcp:tools` authorization scope is normalized to `mcp_tools` at the compatibility authorization URL. Already-open old consent pages need a new authorization attempt. Legacy client metadata remains for audit only; legacy token and authorization-code rows are deleted. Runtime never accepts legacy credentials, and rerunning the historical importer is forbidden. Keep pre-upgrade backups restricted since they contain legacy plaintext credentials.
+## Scopes and permissions
 
-Rollback restores the pre-upgrade database and matching old application together. The migration deliberately has no lossy down conversion from hashed native secrets. Do not run the old plugin against the migrated database.
+Self-registered clients receive the scopes from the plugin setting, or RedmineUP Agent's MCP scope list when the setting is empty. `admin` is never granted. A request for fewer scopes is honoured; a request for scopes the application does not hold is narrowed. A token only limits what a user can do. Users still act within their own Redmine project permissions.
 
-## Dynamic registration
+## Configuration
 
-Identical public-client name, canonical callback URL set and MCP scope reuse one native Application, backed by a unique database registration key. URI ordering/duplicates and the old `mcp:tools` scope do not create duplicates. Each user has separate grants and tokens; reconnecting another user does not revoke existing grants. Different metadata creates a separate application. An administrator-edited client is not reused for mismatching metadata. Do not merge by display name alone.
+**Administration → Plugins → Redmine MCP → Configure**
+
+- *Trusted callback URLs* — one per line; `*` matches one run of characters without `/ ? # @`. Defaults cover claude.ai, Claude Code (`http://localhost:*/callback`, `http://127.0.0.1:*/callback`), ChatGPT (`https://chatgpt.com/connector/oauth/*`) and VS Code. Plain http is accepted only for loopback hosts. An empty list disables DCR.
+- *Trusted client metadata hosts* — hosts whose metadata documents are fetched. An empty list disables CIMD. Redmine needs outbound HTTPS to these hosts.
+- *Scopes for self-registered clients* — empty means "follow RedmineUP Agent".
+
+Also required:
+
+1. **Administration → Settings → API**: enable the REST web service.
+2. **Administration → Plugins → RedmineUP Agent**: enable *MCP server*. Keep *Allow MCP access with API key* off unless needed.
+3. **Administration → Settings → General → Host name and path** must be the public host. RedmineUP Agent builds its `WWW-Authenticate` discovery pointer from this setting.
+
+Users connect with `https://<redmine>/mcp`.
+
+## Upgrade from 1.x
+
+1. Back up the database.
+2. Deploy RedmineUP Agent and this version together and run `bundle exec rake redmine:plugins:migrate RAILS_ENV=production`.
+3. Migration `RetireBuiltinMcpTools` deletes applications that only hold the retired `mcp_tools` scope, with their grants and tokens. Those tokens cannot use RedmineUP Agent's tools. Every user removes and re-adds the connector once. Other OAuth applications, including Azure SSO, are untouched.
+4. Enable RedmineUP Agent's MCP server and check that `/.well-known/oauth-protected-resource/mcp` returns RedmineUP scopes.
+
+The `mcp_tools` permission stays registered so leftover 1.x applications remain valid records. `/mcp/oauth/authorize`, `/mcp/oauth/token` and `/admin/mcp/tokens` remain compatibility URLs. Rollback means restoring the database backup together with the 1.x plugin and disabling RedmineUP Agent's MCP server, because the two plugins claim the same URLs.
 
 ## Tests
 
-Run `RAILS_ENV=test bundle exec rake redmine:plugins:test NAME=redmine_mcp` against a dedicated test database. Standalone checks run separately: `ruby test/standalone/tool_authorization_check.rb` and `ruby test/standalone/tool_serialization_check.rb`. CI covers Redmine 7 with MySQL, PostgreSQL and SQLite. Native OAuth integration tests cover migration, PKCE, token rotation, expiry, user lock, scopes, revocation and compatibility URLs.
+`RAILS_ENV=test bundle exec rake redmine:plugins:test NAME=redmine_mcp`. `test/integration/redmineup_agent_connect_test.rb` runs end to end against RedmineUP Agent when it is installed and is skipped otherwise (public CI). CI covers Redmine 7 with MySQL, PostgreSQL and SQLite.

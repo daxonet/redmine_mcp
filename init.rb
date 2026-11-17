@@ -1,18 +1,35 @@
-require_dependency File.join(File.dirname(__FILE__), 'lib/redmine_mcp/tools')
-require_dependency File.join(File.dirname(__FILE__), 'lib/redmine_mcp/authorization')
+require_relative 'lib/redmine_mcp/backend'
+require_relative 'lib/redmine_mcp/redirect_policy'
+require_relative 'lib/redmine_mcp/client_metadata_document'
+require_relative 'lib/redmine_mcp/dynamic_client_registration'
 
 Redmine::Plugin.register :redmine_mcp do
   name        'Redmine MCP Plugin'
   author      'Redmine MCP'
-  description 'Exposes Redmine as a Model Context Protocol (MCP) server with OAuth 2.1 for Claude AI'
-  version     '1.2.0'
+  description 'Zero-configuration OAuth (dynamic registration and client metadata documents) for the RedmineUP Agent MCP server'
+  version     '2.0.0'
 
   requires_redmine version_or_higher: '7.0'
 
   settings default: {
-    'allowed_redirect_uris' => "https://claude.ai/api/mcp/auth_callback\n"
+    'allowed_redirect_uris' => <<~URIS,
+      https://claude.ai/api/mcp/auth_callback
+      http://localhost/callback
+      http://localhost:*/callback
+      http://127.0.0.1/callback
+      http://127.0.0.1:*/callback
+      https://chatgpt.com/connector_platform_oauth_redirect
+      https://chatgpt.com/connector/oauth/*
+      http://127.0.0.1:33418
+      http://127.0.0.1:33418/
+      https://vscode.dev/redirect
+    URIS
+    'cimd_trusted_hosts' => "claude.ai\nchatgpt.com\n",
+    'scopes' => ''
   }, partial: 'settings/mcp_settings'
 
+  # Retired 1.x scope. Kept registered so leftover 1.x applications remain
+  # valid Doorkeeper records until an administrator deletes them.
   permission :mcp_tools, {}, require: :loggedin
 end
 

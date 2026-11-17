@@ -2,14 +2,29 @@
 
 module RedmineMcp
   module NativeOauth
+    # Scope of applications created by redmine_mcp 1.x. Still recognised so
+    # leftover applications keep the MCP policies until they are removed.
     SCOPE = 'mcp_tools'
 
+    # An MCP application is one this plugin registered (DCR or CIMD), or a
+    # legacy 1.x application. Other Redmine OAuth clients keep Redmine's
+    # default policy. Accepts an application, grant or token.
     def self.mcp?(record)
-      record && record.scopes.to_s.split.include?(SCOPE)
+      app = record.is_a?(Doorkeeper::Application) ? record : record&.application
+      return false unless app
+
+      app.mcp_registration_key.present? || app.scopes.to_s.split.include?(SCOPE)
     end
 
-    # Only MCP applications are affected; other Redmine OAuth clients retain
-    # the server's existing policy.
+    # MCP clients usually ask for every advertised scope, an old 1.x scope, or
+    # nothing. Grant what they ask for within the application's scopes, and
+    # all of the application's scopes when the request names none of them.
+    def self.effective_scope(app, requested)
+      granted = app.scopes.to_s.split
+      picked = requested.to_s.split & granted
+      (picked.presence || granted).join(' ')
+    end
+
     module AuthorizationPolicy
       def new
         return unless valid_mcp_authorization?
@@ -24,9 +39,19 @@ module RedmineMcp
       private
 
       def valid_mcp_authorization?
-        app = Doorkeeper::Application.find_by(uid: params[:client_id])
+        client_id = params[:client_id].to_s
+        if ClientMetadataDocument.candidate?(client_id)
+          begin
+            ClientMetadataDocument.resolve!(client_id)
+          rescue ClientMetadataDocument::Invalid => e
+            Rails.logger.warn("[redmine_mcp] CIMD client #{client_id} rejected: #{e.message}")
+            render json: {error: 'invalid_client', error_description: e.message}, status: :bad_request
+            return false
+          end
+        end
+        app = Doorkeeper::Application.find_by(uid: client_id)
         return true unless NativeOauth.mcp?(app)
-        params[:scope] = SCOPE if params[:scope].blank? || params[:scope] == 'mcp:tools'
+        params[:scope] = NativeOauth.effective_scope(app, params[:scope])
         challenge = params[:code_challenge].to_s
         return true if params[:code_challenge_method] == 'S256' && challenge.match?(/\A[A-Za-z0-9_-]{43}\z/)
         render json: {error: 'invalid_request', error_description: 'MCP requires S256 PKCE'}, status: :bad_request
@@ -36,9 +61,10 @@ module RedmineMcp
 
     module TokenPolicy
       def create
-        if params[:scope] == 'mcp:tools'
-          params[:scope] = SCOPE
-          request.parameters['scope'] = SCOPE
+        # Old clients may still send the retired 1.x scope on refresh.
+        if Backend::LEGACY_SCOPES.include?(params[:scope].to_s)
+          params.delete(:scope)
+          request.parameters.delete('scope')
         end
         record = case params[:grant_type]
                  when 'refresh_token'
@@ -89,6 +115,9 @@ Rails.application.config.after_initialize do
     Doorkeeper::OAuth::RefreshTokenRequest < RedmineMcp::NativeOauth::RefreshPolicy
   Doorkeeper::AccessToken.prepend(RedmineMcp::NativeOauth::TokenLifetime) unless
     Doorkeeper::AccessToken < RedmineMcp::NativeOauth::TokenLifetime
+  checker = Doorkeeper::OAuth::Helpers::URIChecker.singleton_class
+  checker.prepend(RedmineMcp::RedirectPolicy::LocalhostLoopback) unless
+    checker < RedmineMcp::RedirectPolicy::LocalhostLoopback
 end
 
 class McpNativeOauthHooks < Redmine::Hook::ViewListener

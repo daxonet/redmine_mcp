@@ -6,9 +6,9 @@ module RedmineMcp
   # Public clients can share an application; grants/tokens remain per user.
   # A database unique key makes retried/concurrent registrations idempotent.
   class DynamicClientRegistration
-    def self.register!(name:, redirect_uris:)
+    def self.register!(name:, redirect_uris:, scopes:)
       attributes = {name: name, redirect_uri: redirect_uris.uniq.sort.join("\n"),
-                    scopes: 'mcp_tools', confidential: false}
+                    scopes: scopes, confidential: false}
       key = Digest::SHA256.hexdigest(JSON.generate(attributes))
       existing = Doorkeeper::Application.find_by(mcp_registration_key: key)
       if existing
