@@ -1,3 +1,5 @@
+> **Archived (2026-11-17).** No longer maintained. The MCP endpoint and tools now come from RedmineUP Agent, and zero-configuration sign-in for it moved to [daxonet/redmine_agent_connect](https://github.com/daxonet/redmine_agent_connect). The last release of this standalone MCP server is tag [`v1.2.0`](https://github.com/daxonet/redmine_mcp/releases/tag/v1.2.0).
+
 # Redmine MCP 1.2.0 — native OAuth, clean reconnect
 
 Requires Redmine 7.0+. MCP tools always enforce the signed-in user's Redmine project, issue, workflow and write permissions. An OAuth scope never grants additional business rights.
